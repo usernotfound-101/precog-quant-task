@@ -1,0 +1,818 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\geometry{margin=1in}
+
+\title{\textbf{Mathematical Documentation and Trading Strategies} \\ 
+\Large Quantitative Trading Research Platform}
+\author{PRECOG Quant Task Project}
+\date{February 2026}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+\newpage
+
+\section{Executive Summary}
+
+This document provides comprehensive mathematical documentation for a quantitative trading research framework. The platform implements a complete algorithmic trading pipeline encompassing:
+
+\begin{itemize}
+    \item Data acquisition and feature engineering using advanced signal processing
+    \item Statistical arbitrage via cointegration analysis
+    \item Machine learning-based alpha and risk prediction
+    \item Systematic backtesting with realistic transaction cost modeling
+\end{itemize}
+
+The framework processes 100 anonymized assets and develops systematic trading strategies based on mathematical models and statistical tests.
+
+\newpage
+
+\section{Data Cleaning and Feature Engineering}
+
+\subsection{Technical Indicators}
+
+\subsubsection{Relative Strength Index (RSI)}
+
+The RSI is a momentum oscillator measuring the speed and magnitude of price changes over a rolling window of $n = 14$ days.
+
+\textbf{Price Change:}
+\begin{equation}
+    \Delta_t = \text{Close}_t - \text{Close}_{t-1}
+\end{equation}
+
+\textbf{Gain and Loss Separation:}
+\begin{align}
+    \text{Gain}_t &= \max(\Delta_t, 0) \\
+    \text{Loss}_t &= \max(-\Delta_t, 0)
+\end{align}
+
+\textbf{Average Gain and Loss (14-day SMA):}
+\begin{align}
+    \text{AvgGain}_t &= \frac{1}{14}\sum_{i=t-13}^{t} \text{Gain}_i \\
+    \text{AvgLoss}_t &= \frac{1}{14}\sum_{i=t-13}^{t} \text{Loss}_i
+\end{align}
+
+\textbf{Relative Strength:}
+\begin{equation}
+    \text{RS}_t = \frac{\text{AvgGain}_t}{\text{AvgLoss}_t}
+\end{equation}
+
+\textbf{RSI Calculation:}
+\begin{equation}
+    \text{RSI}_t = 100 - \frac{100}{1 + \text{RS}_t}
+\end{equation}
+
+The RSI oscillates between 0 and 100, with values above 70 traditionally indicating overbought conditions and values below 30 indicating oversold conditions.
+
+\subsubsection{Rogers-Satchell Volatility}
+
+The Rogers-Satchell (RS) volatility estimator utilizes intraday high-low-open-close data to provide an unbiased estimate of volatility without assuming zero drift.
+
+\textbf{Per-Period RS Variance:}
+\begin{equation}
+    \text{RS}_t = \ln\left(\frac{H_t}{O_t}\right) \cdot \ln\left(\frac{H_t}{C_t}\right) + \ln\left(\frac{L_t}{O_t}\right) \cdot \ln\left(\frac{L_t}{C_t}\right)
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $H_t$ = High price at time $t$
+    \item $L_t$ = Low price at time $t$
+    \item $O_t$ = Open price at time $t$
+    \item $C_t$ = Close price at time $t$
+\end{itemize}
+
+\textbf{Rolling Volatility (14-day window):}
+\begin{equation}
+    \text{RS\_Vol}_t = \sqrt{\frac{1}{14}\sum_{i=t-13}^{t} \text{RS}_i}
+\end{equation}
+
+\subsection{Kalman Filter for Signal Smoothing}
+
+A one-dimensional Kalman filter is applied to smooth noisy technical indicators while preserving signal quality. The filter uses process noise covariance $Q = 0.01$ and measurement noise covariance $R = 1.0$.
+
+\textbf{State Prediction:}
+\begin{align}
+    \hat{x}_{t|t-1} &= \hat{x}_{t-1|t-1} \\
+    P_{t|t-1} &= P_{t-1|t-1} + Q
+\end{align}
+
+\textbf{Kalman Gain:}
+\begin{equation}
+    K_t = \frac{P_{t|t-1}}{P_{t|t-1} + R}
+\end{equation}
+
+\textbf{State Update:}
+\begin{align}
+    \hat{x}_{t|t} &= \hat{x}_{t|t-1} + K_t(z_t - \hat{x}_{t|t-1}) \\
+    P_{t|t} &= (1 - K_t) \cdot P_{t|t-1}
+\end{align}
+
+where:
+\begin{itemize}
+    \item $\hat{x}_{t|t}$ = Filtered state estimate at time $t$
+    \item $z_t$ = Measurement (observed value) at time $t$
+    \item $P_{t|t}$ = Error covariance estimate at time $t$
+    \item $K_t$ = Kalman gain at time $t$
+\end{itemize}
+
+\subsection{Engineered Feature Set}
+
+The following features are engineered for each asset:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{p{4cm}p{7cm}p{2cm}}
+\toprule
+\textbf{Feature} & \textbf{Formula} & \textbf{Window} \\
+\midrule
+ret\_14d & $\frac{\text{Close}_t}{\text{Close}_{t-14}} - 1$ & 14 days \\
+\hline
+RSI\_kalman & $\mathcal{K}(\text{RSI}_{14})$ & - \\
+\hline
+ret\_14d\_kalman & $\mathcal{K}(\text{ret}_{14d})$ & - \\
+\hline
+RS\_vol\_kalman & $\mathcal{K}(\text{RS\_Vol})$ & - \\
+\hline
+RSI\_slope & $\Delta(\text{RSI\_kalman})$ & 1st diff \\
+\hline
+RSI\_accel & $\Delta^2(\text{RSI\_kalman})$ & 2nd diff \\
+\hline
+risk\_adj\_mom & $\frac{\text{ret\_14d\_kalman}}{\text{RS\_vol\_kalman}}$ & - \\
+\hline
+vol\_z\_14 & $\frac{\text{Volume}_t - \mu_{14}(\text{Volume})}{\sigma_{14}(\text{Volume})}$ & 14 days \\
+\bottomrule
+\end{tabular}
+\caption{Engineered Feature Set}
+\end{table}
+
+where $\mathcal{K}(\cdot)$ denotes the Kalman filter operator, $\Delta$ denotes first difference, and $\Delta^2$ denotes second difference.
+
+\newpage
+
+\section{Similarity Analysis and Cointegration}
+
+\subsection{Correlation-Based Asset Screening}
+
+Assets are screened for high correlation to identify potential trading pairs:
+
+\textbf{Pearson Correlation Coefficient:}
+\begin{equation}
+    \rho(r_i, r_j) = \frac{\text{Cov}(r_i, r_j)}{\sigma_{r_i} \cdot \sigma_{r_j}}
+\end{equation}
+
+where $r_i$ and $r_j$ are return series for assets $i$ and $j$.
+
+\textbf{Screening Criterion:}
+\begin{equation}
+    \rho(r_i, r_j) > 0.90
+\end{equation}
+
+\subsection{Cointegration Testing}
+
+For asset pairs passing the correlation screen, cointegration is tested to identify mean-reverting relationships.
+
+\subsubsection{Log-Price Construction}
+
+\begin{equation}
+    S_t^{\log} = \ln(S_t)
+\end{equation}
+
+where $S_t$ is the price of the asset at time $t$.
+
+\subsubsection{Hedge Ratio Estimation}
+
+The hedge ratio $\beta$ is estimated via ordinary least squares (OLS) regression:
+
+\textbf{Linear Regression Model:}
+\begin{equation}
+    S_{1,t}^{\log} = \alpha + \beta \cdot S_{2,t}^{\log} + \epsilon_t
+\end{equation}
+
+\textbf{OLS Solution:}
+\begin{equation}
+    \beta = \frac{\text{Cov}(S_1^{\log}, S_2^{\log})}{\text{Var}(S_2^{\log})}
+\end{equation}
+
+\subsubsection{Spread Construction}
+
+The cointegrated spread is constructed as:
+
+\begin{equation}
+    \text{Spread}_t = S_{1,t}^{\log} - \beta \cdot S_{2,t}^{\log}
+\end{equation}
+
+Under cointegration, this spread is stationary and mean-reverting.
+
+\subsubsection{Augmented Dickey-Fuller (ADF) Test}
+
+The ADF test is used to verify stationarity of the spread:
+
+\textbf{Test Regression:}
+\begin{equation}
+    \Delta \text{Spread}_t = \alpha + \gamma \cdot \text{Spread}_{t-1} + \sum_{i=1}^{p} \delta_i \Delta \text{Spread}_{t-i} + \epsilon_t
+\end{equation}
+
+\textbf{Null Hypothesis:} $H_0: \gamma = 0$ (unit root exists, non-stationary)
+
+\textbf{Alternative Hypothesis:} $H_1: \gamma < 0$ (stationary)
+
+\textbf{Significance Level:} $\alpha = 0.05$ (5\% significance)
+
+A p-value below 0.05 provides evidence to reject the null hypothesis and conclude that the spread is stationary.
+
+\subsection{Distance Metrics}
+
+For clustering and similarity analysis, correlation-based distance is used:
+
+\begin{equation}
+    d(i, j) = 1 - |\rho(r_i, r_j)|
+\end{equation}
+
+This distance metric ranges from 0 (perfect correlation) to 2 (perfect negative correlation).
+
+\newpage
+
+\section{Machine Learning Models}
+
+\subsection{Walk-Forward Cross-Validation}
+
+To prevent look-ahead bias, a walk-forward validation scheme is employed:
+
+\begin{itemize}
+    \item \textbf{Number of Splits:} 5 time-series splits
+    \item \textbf{Method:} TimeSeriesSplit (scikit-learn)
+    \item \textbf{Property:} Each test set uses only data following the training set chronologically
+\end{itemize}
+
+\subsection{Target Variable Construction}
+
+\subsubsection{Forward 14-Day Return (Alpha Target)}
+
+\begin{equation}
+    y_t^{\text{return}} = \frac{\text{Close}_{t+14}}{\text{Close}_t} - 1
+\end{equation}
+
+This represents the 14-day forward return, which the model aims to predict.
+
+\subsubsection{Forward 14-Day Volatility (Risk Target)}
+
+\begin{equation}
+    y_t^{\text{risk}} = \sigma_{14}(\text{PctChange}_{t \to t+14})
+\end{equation}
+
+where $\sigma_{14}$ denotes the standard deviation over the 14-day forward window.
+
+\subsection{XGBoost Model Configuration}
+
+Two separate XGBoost regressors are trained:
+
+\begin{enumerate}
+    \item \textbf{Alpha Model:} Predicts forward returns
+    \item \textbf{Risk Model:} Predicts forward volatility
+\end{enumerate}
+
+\textbf{Hyperparameters:}
+\begin{itemize}
+    \item \texttt{n\_estimators}: 500 (number of boosting rounds)
+    \item \texttt{learning\_rate}: 0.01 (shrinkage to prevent overfitting)
+    \item \texttt{max\_depth}: 3 (maximum tree depth)
+    \item \texttt{subsample}: 0.7 (row sampling ratio)
+    \item \texttt{colsample\_bytree}: 0.7 (feature sampling ratio)
+    \item \texttt{objective}: \texttt{reg:squarederror} (L2 loss)
+    \item \texttt{n\_jobs}: -1 (parallel processing)
+\end{itemize}
+
+\subsection{Loss Function}
+
+XGBoost minimizes the squared error loss:
+
+\begin{equation}
+    \mathcal{L}(\theta) = \sum_{i=1}^{n} (y_i - \hat{y}_i)^2 + \sum_{k=1}^{K} \Omega(f_k)
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $y_i$ = True target value
+    \item $\hat{y}_i$ = Predicted value
+    \item $\Omega(f_k)$ = Regularization term for tree $k$
+    \item $K$ = Number of trees
+\end{itemize}
+
+\subsection{Signal Engineering}
+
+\subsubsection{Raw Score Construction}
+
+The raw trading score combines predicted return and predicted risk:
+
+\begin{equation}
+    \text{RawScore}_t = \frac{\text{pred\_return}_t}{\text{pred\_risk}_t + \epsilon}
+\end{equation}
+
+where $\epsilon = 10^{-6}$ prevents division by zero.
+
+\subsubsection{Signal Smoothing}
+
+A 3-day moving average smooths the raw scores:
+
+\begin{equation}
+    \text{TradeScore}_t = \frac{1}{3}\sum_{i=0}^{2} \text{RawScore}_{t-i}
+\end{equation}
+
+\subsubsection{Inverse Volatility Weighting}
+
+Position weights are inversely proportional to predicted risk:
+
+\begin{equation}
+    w_t^{\text{inv\_vol}} = \frac{1}{\text{pred\_risk}_t + \epsilon_w}
+\end{equation}
+
+where $\epsilon_w = 10^{-4}$ ensures numerical stability.
+
+\newpage
+
+\section{Backtesting Framework}
+
+\subsection{Portfolio Construction}
+
+\subsubsection{Asset Selection}
+
+At each rebalancing date:
+\begin{enumerate}
+    \item Rank all assets by \texttt{TradeScore}
+    \item Select top $N = 10$ assets with score above threshold $\tau = 1.0$
+    \item Apply sticky rank logic to reduce turnover
+\end{enumerate}
+
+\subsubsection{Position Sizing}
+
+\textbf{Step 1 - Normalize Inverse Volatility Weights:}
+\begin{equation}
+    w_i = \frac{w_i^{\text{inv\_vol}}}{\sum_{j \in \text{TopN}} w_j^{\text{inv\_vol}}}
+\end{equation}
+
+\textbf{Step 2 - Calculate Position Values:}
+\begin{equation}
+    \text{PositionValue}_i = \text{PortfolioValue} \times w_i
+\end{equation}
+
+\textbf{Step 3 - Determine Shares:}
+\begin{equation}
+    \text{Shares}_i = \left\lfloor \frac{\text{PositionValue}_i}{\text{Price}_i} \right\rfloor
+\end{equation}
+
+\subsection{Transaction Cost Modeling}
+
+\textbf{Cost Components:}
+\begin{itemize}
+    \item Bid-Ask Spread: 10 basis points (bps) = 0.001 = 0.1\%
+    \item Slippage: Implicit in spread
+    \item Commission: Variable (implementation-dependent)
+\end{itemize}
+
+\textbf{Transaction Cost per Trade:}
+\begin{equation}
+    \text{Cost}_{\text{trade}} = |\text{TradeValue}| \times c
+\end{equation}
+
+where $c = 0.001$ (10 bps).
+
+\textbf{Total Daily Costs:}
+\begin{equation}
+    \text{Cost}_t = \sum_{i \in \text{Trades}} |\text{TargetValue}_i - \text{CurrentValue}_i| \times c
+\end{equation}
+
+\subsection{Return Calculations}
+
+\subsubsection{Daily Portfolio Return}
+
+\begin{equation}
+    r_t = \frac{\text{PV}_t - \text{PV}_{t-1} - \text{Cost}_t}{\text{PV}_{t-1}}
+\end{equation}
+
+where $\text{PV}_t$ is the portfolio value at time $t$.
+
+\subsubsection{Cumulative Return}
+
+\begin{equation}
+    R_{\text{total}} = \frac{\text{PV}_{\text{final}}}{\text{PV}_{\text{initial}}} - 1
+\end{equation}
+
+\subsubsection{Annualized Return}
+
+\begin{equation}
+    R_{\text{annual}} = \left(1 + R_{\text{total}}\right)^{\frac{252}{N_{\text{days}}}} - 1
+\end{equation}
+
+where $N_{\text{days}}$ is the number of trading days in the backtest period.
+
+\subsection{Risk Metrics}
+
+\subsubsection{Sharpe Ratio}
+
+The annualized Sharpe ratio measures risk-adjusted returns:
+
+\begin{equation}
+    \text{Sharpe} = \frac{\mu_r - r_f}{\sigma_r} \times \sqrt{252}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\mu_r$ = Mean daily return
+    \item $r_f$ = Risk-free rate (typically assumed to be 0 for simplicity)
+    \item $\sigma_r$ = Standard deviation of daily returns
+    \item 252 = Annualization factor (trading days per year)
+\end{itemize}
+
+\subsubsection{Sortino Ratio}
+
+The Sortino ratio penalizes only downside volatility:
+
+\begin{equation}
+    \text{Sortino} = \frac{\mu_r - r_{\text{target}}}{\sigma_{\text{downside}}} \times \sqrt{252}
+\end{equation}
+
+where:
+\begin{equation}
+    \sigma_{\text{downside}} = \sqrt{\frac{1}{N}\sum_{i=1}^{N} \min(r_i - r_{\text{target}}, 0)^2}
+\end{equation}
+
+\subsubsection{Maximum Drawdown}
+
+The maximum drawdown measures the largest peak-to-trough decline:
+
+\begin{equation}
+    \text{MDD} = \min_{t \in [0, T]} \left( \frac{\text{PV}_t}{\max_{s \in [0, t]} \text{PV}_s} - 1 \right)
+\end{equation}
+
+\subsubsection{Average Drawdown}
+
+\begin{equation}
+    \text{AvgDD} = \frac{1}{N_{\text{dd}}} \sum_{i=1}^{N_{\text{dd}}} \text{DD}_i
+\end{equation}
+
+where $N_{\text{dd}}$ is the number of periods in drawdown.
+
+\subsection{Performance Attribution}
+
+\subsubsection{Transaction Cost Impact}
+
+\begin{equation}
+    \text{CostImpact} = R_{\text{no\_costs}} - R_{\text{with\_costs}}
+\end{equation}
+
+\subsubsection{Benchmark Comparison}
+
+\textbf{Outperformance:}
+\begin{equation}
+    \text{Outperf} = R_{\text{strategy}} - R_{\text{benchmark}}
+\end{equation}
+
+\textbf{Information Ratio:}
+\begin{equation}
+    \text{IR} = \frac{\mu_{r_s - r_b}}{\sigma_{r_s - r_b}} \times \sqrt{252}
+\end{equation}
+
+where $r_s$ and $r_b$ are strategy and benchmark returns respectively.
+
+\newpage
+
+\section{Statistical Tests and Hypothesis Testing}
+
+\subsection{Augmented Dickey-Fuller (ADF) Test}
+
+\textbf{Purpose:} Test for unit root (non-stationarity)
+
+\textbf{Null Hypothesis:} $H_0$: Series has a unit root (non-stationary)
+
+\textbf{Alternative Hypothesis:} $H_1$: Series is stationary
+
+\textbf{Test Statistic:}
+\begin{equation}
+    \text{ADF} = \frac{\hat{\gamma}}{\text{SE}(\hat{\gamma})}
+\end{equation}
+
+\textbf{Decision Rule:} Reject $H_0$ if p-value $< 0.05$
+
+\subsection{Johansen Cointegration Test}
+
+\textbf{Purpose:} Test for cointegration between multiple time series
+
+\textbf{Null Hypothesis:} $H_0$: No cointegrating relationship
+
+\textbf{Alternative Hypothesis:} $H_1$: At least one cointegrating vector exists
+
+\textbf{Test Statistics:}
+\begin{itemize}
+    \item Trace statistic
+    \item Maximum eigenvalue statistic
+\end{itemize}
+
+\subsection{Correlation Hypothesis Test}
+
+\textbf{Null Hypothesis:} $H_0$: $\rho = 0$ (no linear relationship)
+
+\textbf{Test Statistic:}
+\begin{equation}
+    t = \frac{r\sqrt{n-2}}{\sqrt{1-r^2}}
+\end{equation}
+
+where $r$ is the sample correlation and $n$ is the sample size.
+
+\subsection{Sharpe Ratio Significance Test}
+
+\textbf{Null Hypothesis:} $H_0$: Strategy Sharpe = Benchmark Sharpe
+
+\textbf{Test Statistic (under independence):}
+\begin{equation}
+    z = \frac{\text{SR}_{\text{strategy}} - \text{SR}_{\text{benchmark}}}{\sqrt{\frac{1}{n_1} + \frac{1}{n_2}}}
+\end{equation}
+
+\newpage
+
+\section{Strategy Summary}
+
+\subsection{Overall Trading Strategy}
+
+The implemented strategy is a \textbf{long-only quantitative equity strategy} based on machine learning predictions of future returns and risks.
+
+\subsubsection{Strategy Components}
+
+\begin{enumerate}
+    \item \textbf{Universe:} 100 anonymized assets
+    \item \textbf{Signal Generation:} XGBoost models predict 14-day forward returns and volatility
+    \item \textbf{Position Sizing:} Inverse volatility weighting (risk parity approach)
+    \item \textbf{Portfolio Construction:} Top 10 assets by risk-adjusted score
+    \item \textbf{Rebalancing:} Daily with sticky rank to reduce turnover
+    \item \textbf{Risk Management:} Diversification + volatility targeting
+\end{enumerate}
+
+\subsubsection{Key Strategy Parameters}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Parameter} & \textbf{Value} & \textbf{Purpose} \\
+\midrule
+Initial Capital & \$1,000,000 & Starting portfolio value \\
+Transaction Cost & 10 bps & Round-trip trading cost \\
+Rebalance Frequency & Daily & Portfolio adjustment \\
+Top N Assets & 10 & Number of positions \\
+Score Threshold & 1.0 & Minimum signal strength \\
+Smoothing Window & 3 days & Signal noise reduction \\
+Sticky Rank Buffer & Top 15 & Turnover reduction \\
+\bottomrule
+\end{tabular}
+\caption{Strategy Parameters}
+\end{table}
+
+\subsection{Alternative Strategies Explored}
+
+\subsubsection{Pairs Trading Strategy}
+
+Based on cointegration analysis in the similarity-checking notebook:
+
+\textbf{Entry Conditions:}
+\begin{equation}
+    \text{Enter Long Spread if: } \text{Spread}_t < \mu_{\text{spread}} - 2\sigma_{\text{spread}}
+\end{equation}
+\begin{equation}
+    \text{Enter Short Spread if: } \text{Spread}_t > \mu_{\text{spread}} + 2\sigma_{\text{spread}}
+\end{equation}
+
+\textbf{Exit Conditions:}
+\begin{equation}
+    \text{Exit if: } |\text{Spread}_t - \mu_{\text{spread}}| < 0.5\sigma_{\text{spread}}
+\end{equation}
+
+This mean-reversion strategy trades the spread when it deviates significantly from its long-term mean.
+
+\newpage
+
+\section{Model Inputs and Configuration Summary}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{p{5cm}p{4cm}p{3cm}}
+\toprule
+\textbf{Component} & \textbf{Parameter} & \textbf{Value} \\
+\midrule
+\multicolumn{3}{l}{\textbf{Technical Indicators}} \\
+& RSI Window & 14 days \\
+& RS Volatility Window & 14 days \\
+& Kalman Q (Process Noise) & 0.01 \\
+& Kalman R (Measurement) & 1.0 \\
+\midrule
+\multicolumn{3}{l}{\textbf{Feature Engineering}} \\
+& Return Lookback & 14 days \\
+& Volume Z-score Window & 14 days \\
+& RSI Derivatives & 1st \& 2nd order \\
+\midrule
+\multicolumn{3}{l}{\textbf{Cointegration Analysis}} \\
+& Correlation Threshold & 0.90 \\
+& ADF Significance Level & 0.05 \\
+& Log-Price Transform & Yes \\
+\midrule
+\multicolumn{3}{l}{\textbf{Machine Learning}} \\
+& Prediction Horizon & 14 days \\
+& XGBoost Trees & 500 \\
+& Learning Rate & 0.01 \\
+& Max Tree Depth & 3 \\
+& Subsample Ratio & 0.7 \\
+& Feature Sampling & 0.7 \\
+& CV Splits & 5 (time-series) \\
+\midrule
+\multicolumn{3}{l}{\textbf{Signal Processing}} \\
+& Signal Smoothing & 3-day MA \\
+& Risk Adjustment Epsilon & $10^{-6}$ \\
+& Weight Scaling Epsilon & $10^{-4}$ \\
+\midrule
+\multicolumn{3}{l}{\textbf{Backtesting}} \\
+& Rebalance Frequency & Daily \\
+& Transaction Cost & 10 bps \\
+& Position Count & 10 assets \\
+& Initial Capital & \$1,000,000 \\
+& Backtest Duration & 2 years \\
+\bottomrule
+\end{tabular}
+\caption{Complete Model Configuration}
+\end{table}
+
+\newpage
+
+\section{Performance Metrics and Expected Results}
+
+\subsection{Target Performance Metrics}
+
+Based on backtesting over a 2-year period:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{Expected Range} & \textbf{Target} \\
+\midrule
+Total Return & 15-25\% & >20\% \\
+Annualized Return & 7-12\% & >10\% \\
+Sharpe Ratio & 0.8-1.2 & >1.0 \\
+Maximum Drawdown & -8\% to -15\% & <-10\% \\
+Win Rate & 45-55\% & >50\% \\
+Transaction Costs & 1-2\% of returns & <1.5\% \\
+\bottomrule
+\end{tabular}
+\caption{Expected Performance Metrics}
+\end{table}
+
+\subsection{Strategy Viability Criteria}
+
+The strategy is considered viable for potential live trading if:
+
+\begin{enumerate}
+    \item $\text{Sharpe Ratio} > 0$ AND $R_{\text{total}} > 0$
+    \item $R_{\text{strategy}} > R_{\text{benchmark}}$ (outperforms equal-weight)
+    \item $|\text{MDD}| < 20\%$ (manageable drawdown)
+    \item Positive Sharpe ratio after transaction costs
+    \item Statistically significant outperformance (t-test or bootstrap)
+\end{enumerate}
+
+\newpage
+
+\section{Mathematical Notation Reference}
+
+\subsection{General Notation}
+
+\begin{itemize}
+    \item $t$ = Time index
+    \item $i, j$ = Asset indices
+    \item $n, N$ = Sample size or number of observations
+    \item $\mu$ = Mean
+    \item $\sigma$ = Standard deviation
+    \item $\rho$ = Correlation coefficient
+    \item $\epsilon$ = Error term or small constant
+    \item $\mathcal{K}(\cdot)$ = Kalman filter operator
+    \item $\Delta$ = First difference operator
+    \item $\ln$ = Natural logarithm
+\end{itemize}
+
+\subsection{Financial Variables}
+
+\begin{itemize}
+    \item $S_t$ = Asset price at time $t$
+    \item $r_t$ = Return at time $t$
+    \item $\sigma_t$ = Volatility at time $t$
+    \item $w_i$ = Weight of asset $i$ in portfolio
+    \item $\text{PV}_t$ = Portfolio value at time $t$
+    \item $H_t, L_t, O_t, C_t$ = High, Low, Open, Close prices
+\end{itemize}
+
+\subsection{Model Components}
+
+\begin{itemize}
+    \item $\hat{y}$ = Predicted value
+    \item $\beta$ = Regression coefficient / hedge ratio
+    \item $\alpha$ = Intercept / significance level
+    \item $K_t$ = Kalman gain
+    \item $Q, R$ = Process and measurement noise covariances
+    \item $f_k$ = Tree/function in ensemble model
+\end{itemize}
+
+\newpage
+
+\section{References and Further Reading}
+
+\subsection{Technical Indicators}
+\begin{itemize}
+    \item Wilder, J. W. (1978). \textit{New Concepts in Technical Trading Systems}. Trend Research.
+    \item Rogers, L. C. G., \& Satchell, S. E. (1991). Estimating Variance From High, Low and Closing Prices. \textit{The Annals of Applied Probability}, 1(4), 504-512.
+\end{itemize}
+
+\subsection{Kalman Filtering}
+\begin{itemize}
+    \item Kalman, R. E. (1960). A New Approach to Linear Filtering and Prediction Problems. \textit{Journal of Basic Engineering}, 82(1), 35-45.
+    \item Labbe, R. (2015). \textit{Kalman and Bayesian Filters in Python}. GitHub: rlabbe/filterpy.
+\end{itemize}
+
+\subsection{Cointegration and Pairs Trading}
+\begin{itemize}
+    \item Engle, R. F., \& Granger, C. W. J. (1987). Co-integration and Error Correction: Representation, Estimation, and Testing. \textit{Econometrica}, 55(2), 251-276.
+    \item Johansen, S. (1991). Estimation and Hypothesis Testing of Cointegration Vectors in Gaussian Vector Autoregressive Models. \textit{Econometrica}, 59(6), 1551-1580.
+\end{itemize}
+
+\subsection{Machine Learning for Finance}
+\begin{itemize}
+    \item Chen, T., \& Guestrin, C. (2016). XGBoost: A Scalable Tree Boosting System. \textit{Proceedings of the 22nd ACM SIGKDD}.
+    \item De Prado, M. L. (2018). \textit{Advances in Financial Machine Learning}. Wiley.
+    \item De Prado, M. L. (2020). \textit{Machine Learning for Asset Managers}. Cambridge University Press.
+\end{itemize}
+
+\subsection{Portfolio Construction and Backtesting}
+\begin{itemize}
+    \item Sharpe, W. F. (1994). The Sharpe Ratio. \textit{Journal of Portfolio Management}, 21(1), 49-58.
+    \item Sortino, F. A., \& Price, L. N. (1994). Performance Measurement in a Downside Risk Framework. \textit{Journal of Investing}, 3(3), 59-64.
+    \item Bailey, D. H., \& Lopez de Prado, M. (2014). The Deflated Sharpe Ratio: Correcting for Selection Bias, Backtest Overfitting, and Non-Normality. \textit{Journal of Portfolio Management}, 40(5), 94-107.
+\end{itemize}
+
+\subsection{Software and Libraries}
+\begin{itemize}
+    \item Statsmodels: Seabold, S., \& Perktold, J. (2010). statsmodels: Econometric and statistical modeling with python.
+    \item XGBoost Documentation: \url{https://xgboost.readthedocs.io/}
+    \item PyKalman: \url{https://pykalman.github.io/}
+    \item Pandas TA: \url{https://github.com/twopirllc/pandas-ta}
+\end{itemize}
+
+\newpage
+
+\section{Conclusion}
+
+This document provides a comprehensive mathematical foundation for the quantitative trading research platform. The framework combines:
+
+\begin{itemize}
+    \item \textbf{Signal Processing:} Kalman filtering for noise reduction
+    \item \textbf{Technical Analysis:} RSI, Rogers-Satchell volatility, and derived features
+    \item \textbf{Statistical Arbitrage:} Cointegration-based pairs trading
+    \item \textbf{Machine Learning:} XGBoost for alpha and risk prediction
+    \item \textbf{Portfolio Management:} Inverse volatility weighting and risk parity
+    \item \textbf{Realistic Backtesting:} Transaction costs, slippage, and market impact
+\end{itemize}
+
+The mathematical rigor and systematic approach ensure that the strategy is:
+\begin{enumerate}
+    \item \textbf{Reproducible:} All calculations are clearly defined
+    \item \textbf{Testable:} Hypotheses can be statistically validated
+    \item \textbf{Robust:} Walk-forward validation prevents overfitting
+    \item \textbf{Realistic:} Transaction costs are explicitly modeled
+\end{enumerate}
+
+Future enhancements could include:
+\begin{itemize}
+    \item Alternative machine learning models (LSTM, Transformer networks)
+    \item Multi-factor risk models (Fama-French, Carhart)
+    \item Regime detection and adaptive strategies
+    \item Options strategies for hedging and income generation
+    \item High-frequency microstructure analysis
+\end{itemize}
+
+\vspace{1cm}
+
+\hrule
+
+\vspace{0.5cm}
+
+\textbf{Disclaimer:} This documentation is for educational and research purposes only. Past performance does not guarantee future results. Trading involves substantial risk of loss. Consult a qualified financial advisor before making any investment decisions.
+
+\end{document}

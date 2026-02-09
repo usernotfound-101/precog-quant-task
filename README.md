@@ -2,6 +2,8 @@
 
 A comprehensive quantitative trading research framework that combines machine learning, cointegration analysis, and backtesting to develop and validate systematic trading strategies.
 
+> **📖 [Complete Mathematical Documentation (PDF)](mathematical_documentation.pdf)** - See [Mathematical Documentation README](MATHEMATICAL_DOCUMENTATION_README.md) for details on all formulas and strategies.
+
 ## Project Overview
 
 Project implements a full algorithmic trading pipeline:
@@ -15,16 +17,19 @@ Project implements a full algorithmic trading pipeline:
 
 ```
 <repo>/
-├── anonymized_data/          # 100 anonymized asset CSV files (Asset_001.csv - Asset_100.csv)
-├── models/                    # Trained model outputs and predictions
-├── outputs/                   # Strategy results and analysis artifacts
+├── anonymized_data/                    # 100 anonymized asset CSV files (Asset_001.csv - Asset_100.csv)
+├── models/                              # Trained model outputs and predictions
+├── outputs/                             # Strategy results and analysis artifacts
 │   └── alpha_risk_predictions.csv
-├── data-cleaning.ipynb        # Step 1: Data processing & feature engineering
-├── similarity-checking.ipynb  # Step 2: Cointegration pair analysis
-├── model-building.ipynb       # Step 3: XGBoost model training
-├── backtesting.ipynb          # Step 4: Strategy simulation & metrics
-├── backtesting_analysis.txt   # Detailed performance report
-└── README.md                  # This file
+├── data-cleaning.ipynb                  # Step 1: Data processing & feature engineering
+├── similarity-checking.ipynb            # Step 2: Cointegration pair analysis
+├── model-building.ipynb                 # Step 3: XGBoost model training
+├── backtesting.ipynb                    # Step 4: Strategy simulation & metrics
+├── backtesting_analysis.txt             # Detailed performance report
+├── mathematical_documentation.pdf       # 📖 Complete mathematical documentation (21 pages)
+├── mathematical_documentation.tex       # LaTeX source for documentation
+├── MATHEMATICAL_DOCUMENTATION_README.md # Guide to using the documentation
+└── README.md                            # This file
 ```
 
 ## Key Features
@@ -215,6 +220,24 @@ Strategy should outperform equal-weight benchmark on a risk-adjusted basis.
 - Backtesting is fast (<1 minute)
 
 Tip: Run similarity-checking.ipynb in parallel—it doesn't depend on other notebooks.
+
+## Mathematical Documentation
+
+A comprehensive 21-page LaTeX document is provided that covers all mathematical formulations and strategies:
+
+📖 **[mathematical_documentation.pdf](mathematical_documentation.pdf)** - Complete mathematical reference
+
+### What's Included
+
+- **Data Cleaning & Feature Engineering**: RSI, Rogers-Satchell volatility, Kalman filter equations
+- **Cointegration Analysis**: ADF test, Johansen test, hedge ratio estimation, spread construction
+- **Machine Learning**: XGBoost configuration, walk-forward CV, signal engineering formulas
+- **Backtesting Framework**: Position sizing, transaction costs, Sharpe ratio, maximum drawdown
+- **Trading Strategies**: Long-only quant strategy, pairs trading with mean-reversion
+- **Complete Parameter Tables**: All hyperparameters and configuration in one place
+- **Academic References**: Original papers and software documentation
+
+See [MATHEMATICAL_DOCUMENTATION_README.md](MATHEMATICAL_DOCUMENTATION_README.md) for usage guide and quick formula reference.
 
 ## Disclaimer
 

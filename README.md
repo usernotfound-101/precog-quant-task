@@ -229,6 +229,6 @@ This is research code for educational purposes. Past performance does not guaran
 
 ---
 
-**Author**: PRECOG Research Team  
+**Author**: Ayush Subham Moharana
 **Last Updated**: February 2026  
 **License**: Research/Educational Use

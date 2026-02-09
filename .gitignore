@@ -117,3 +117,15 @@ coverage.xml
 
 # Kaggle
 .kaggle/
+
+# LaTeX auxiliary files (keep .tex and .pdf)
+*.aux
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.blg
+*.bbl
+*.bcf
+*.run.xml
